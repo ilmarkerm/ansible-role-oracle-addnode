@@ -10,31 +10,31 @@
     path: "{{ oracle_home }}/bin/oracle"
   register: oraaddexists
 
-- name: oracle-addnode | Reset installation list
-  set_fact:
-    oracleaddnodenewlist: []
+# Run addnode.sh on master instance
+
+- block:
+    - name: oracle-addnode | Reset installation list
+      set_fact:
+        oracleaddnodenewlist: []
+    - name: oracle-addnode | Build list of nodes without the home
+      set_fact:
+        oracleaddnodenewlist: "{{ oracleaddnodenewlist + [tmpclusterhost | regex_replace('^([^.]+)\\..+$', '\\1')] if not hostvars[tmpclusterhost]['oraaddexists']['stat']['exists'] else oracleaddnodenewlist}}"
+      with_items: "{{ oracle_clusterhosts_fqdn }}"
+      loop_control:
+        loop_var: tmpclusterhost
+    - name: oracle-addnode | List nodes where software will be installed to
+      debug:
+        var: oracleaddnodenewlist
+    - name: oracle-addnode | Run addnode.sh
+      shell: "{{ oracle_home }}/addnode/addnode.sh -silent \"CLUSTER_NEW_NODES={{ '{' }}{{ oracleaddnodenewlist|unique|join(',') }}{{ '}' }}\""
+      environment:
+        ORACLE_HOME: "{{ oracle_home }}"
+      when: oracleaddnodenewlist
+      register: oraaddnode
+      failed_when: oraaddnode.rc != 0 and "was successful" not in oraaddnode.stdout
   when: oracle_rac and oracle_install_lock_granted
 
-- name: oracle-addnode | Build list of nodes without the home
-  set_fact:
-    oracleaddnodenewlist: "{{ oracleaddnodenewlist + [tmpclusterhost | regex_replace('^([^.]+)\\..+$', '\\1')] if not hostvars[tmpclusterhost]['oraaddexists']['stat']['exists'] else oracleaddnodenewlist}}"
-  when: oracle_rac and oracle_install_lock_granted
-  with_items: "{{ oracle_clusterhosts_fqdn }}"
-  loop_control:
-    loop_var: tmpclusterhost
-
-- name: oracle-addnode | List nodes where software will be installed to
-  debug:
-    var: oracleaddnodenewlist
-  when: oracle_rac and oracle_install_lock_granted
-      
-- name: oracle-addnode | Run addnode.sh
-  shell: "{{ oracle_home }}/addnode/addnode.sh -silent \"CLUSTER_NEW_NODES={{ '{' }}{{ oracleaddnodenewlist|unique|join(',') }}{{ '}' }}\""
-  environment:
-    ORACLE_HOME: "{{ oracle_home }}"
-  when: oracle_rac and oracleaddnodenewlist and oracle_install_lock_granted
-  register: oraaddnode
-  failed_when: oraaddnode.rc != 0 and "was successful" not in oraaddnode.stdout
+# Run tasks on other instances
 
 - name: oracle-addnode | Run orainstRoot.sh
   shell: "{{ oracle_inventory_location }}/orainstRoot.sh"
@@ -43,22 +43,28 @@
   become: yes
   become_user: root
 
+- name: oracle-addnode | Check if root.sh needs to be executed
+  stat:
+    path: "{{ oracle_home }}/bin/oradism"
+    get_checksum: no
+    get_mime: no
+  register: oracle_addnode_oradism_stat
+  
 - name: oracle-addnode | Run root.sh
   shell: "{{ oracle_home }}/root.sh"
   become: yes
   become_user: root
-  when: oraaddnode.changed and not oraaddexists.stat.exists
+  when: oracle_addnode_oradism_stat.stat.uid != 0
 
-- name: oracle-addnode | Link sqlnet.ora
-  file:
-    path: "{{ oracle_home }}/network/admin/sqlnet.ora"
-    src: "{{ oracle_meta_sqlnet_ora }}"
-    state: link
-  when: oracle_link_tns
-
-- name: oracle-addnode | Link tnsnames.ora
-  file:
-    path: "{{ oracle_home }}/network/admin/tnsnames.ora"
-    src: "{{ oracle_meta_tnsnames_ora }}"
-    state: link
+- block: 
+    - name: oracle-addnode | Link sqlnet.ora
+      file:
+        path: "{{ oracle_home }}/network/admin/sqlnet.ora"
+        src: "{{ oracle_meta_sqlnet_ora }}"
+        state: link
+    - name: oracle-addnode | Link tnsnames.ora
+      file:
+        path: "{{ oracle_home }}/network/admin/tnsnames.ora"
+        src: "{{ oracle_meta_tnsnames_ora }}"
+        state: link
   when: oracle_link_tns
