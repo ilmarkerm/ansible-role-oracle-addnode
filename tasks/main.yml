@@ -26,12 +26,16 @@
       debug:
         var: oracleaddnodenewlist
     - name: oracle-addnode | Run addnode.sh
-      shell: "{{ oracle_home }}/addnode/addnode.sh -silent \"CLUSTER_NEW_NODES={{ '{' }}{{ oracleaddnodenewlist|unique|join(',') }}{{ '}' }}\""
+      shell: "{{ oracle_home }}/addnode/addnode.sh -ignorePrereq -silent \"CLUSTER_NEW_NODES={{ '{' }}{{ oracleaddnodenewlist|unique|join(',') }}{{ '}' }}\""
       environment:
         ORACLE_HOME: "{{ oracle_home }}"
       when: oracleaddnodenewlist
       register: oraaddnode
       failed_when: oraaddnode.rc != 0 and "was successful" not in oraaddnode.stdout
+    - name: Show addnode output
+      debug:
+        var: oraaddnode
+      when: oraaddnode is changed
   when: oracle_rac and oracle_install_lock_granted
 
 # Run tasks on other instances
