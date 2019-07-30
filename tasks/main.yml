@@ -64,11 +64,11 @@
     - name: oracle-addnode | Link sqlnet.ora
       file:
         path: "{{ oracle_home }}/network/admin/sqlnet.ora"
-        src: "{{ oracle_meta_sqlnet_ora }}"
+        src: "{{ oracle_db_versions[oracle_db_version]['sqlnet_ora'] | default(oracle_meta_sqlnet_ora) }}"
         state: link
     - name: oracle-addnode | Link tnsnames.ora
       file:
         path: "{{ oracle_home }}/network/admin/tnsnames.ora"
-        src: "{{ oracle_meta_tnsnames_ora }}"
+        src: "{{ oracle_db_versions[oracle_db_version]['tnsnames_ora'] | default(oracle_meta_tnsnames_ora) }}"
         state: link
   when: oracle_link_tns
