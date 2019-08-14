@@ -34,7 +34,7 @@
       failed_when: oraaddnode.rc != 0 and "was successful" not in oraaddnode.stdout
     - name: Show addnode output
       debug:
-        var: oraaddnode
+        var: oraaddnode.stdout_lines
       when: oraaddnode is changed
   when: oracle_rac and oracle_install_lock_granted
 
